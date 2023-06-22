@@ -1,0 +1,124 @@
+From d1261ab0e7bf2072d356aa6fbc4ffcdc40a66283 Mon Sep 17 00:00:00 2001
+From: Bipasa Saha <bipasasaha72@gmail.com>
+Date: Thu, 22 Jun 2023 12:41:39 +0530
+Subject: [PATCH] first commit
+
+---
+ src/DataManipulator.ts | 30 +++++++++++++++++++++---------
+ src/Graph.tsx          | 28 ++++++++++++++++------------
+ 2 files changed, 37 insertions(+), 21 deletions(-)
+
+diff --git a/src/DataManipulator.ts b/src/DataManipulator.ts
+index 7f62295..ca021ff 100644
+--- a/src/DataManipulator.ts
++++ b/src/DataManipulator.ts
+@@ -1,20 +1,32 @@
+ import { ServerRespond } from './DataStreamer';
+ 
+ export interface Row {
+-  stock: string,
+-  top_ask_price: number,
++  price_abc: number,
++  price_def: number,
++  upper_bound: number,
++  lower_bound: number,
++  ratio: number,
+   timestamp: Date,
++  trigger_alert:number | undefined,
+ }
+ 
+ 
+ export class DataManipulator {
+-  static generateRow(serverResponds: ServerRespond[]) {
+-    return serverResponds.map((el: any) => {
++  static generateRow(serverResponds: ServerRespond[]):Row {
++      const priceABC=(serverResponds[0].top_ask.price+serverResponds[0].top_bid.price)/2;
++      const priceDEF=(serverResponds[1].top_ask.price+serverResponds[1].top_bid.price)/2;
++      const ratio= priceABC/priceDEF;
++      const upperBound=1+0.05;
++      const lowerBound=1-0.05;
+       return {
+-        stock: el.stock,
+-        top_ask_price: el.top_ask && el.top_ask.price || 0,
+-        timestamp: el.timestamp,
++        price_abc:priceABC,
++        price_def:priceDEF,
++        ratio,
++        timestamp: serverResponds[0].timestamp > serverResponds[1].timestamp ? serverResponds[0].timestamp : serverResponds[1].timestamp,
++        upper_bound:upperBound,
++        lower_bound:lowerBound,
++        trigger_alert: (ratio > upperBound || ratio < lowerBound) ? ratio : undefined,
+       };
+-    })
++    
+   }
+-}
++}
+\ No newline at end of file
+diff --git a/src/Graph.tsx b/src/Graph.tsx
+index 277797d..d0a73d6 100644
+--- a/src/Graph.tsx
++++ b/src/Graph.tsx
+@@ -1,5 +1,5 @@
+ import React, { Component } from 'react';
+-import { Table } from '@finos/perspective';
++import { Table, TableData } from '@finos/perspective';
+ import { ServerRespond } from './DataStreamer';
+ import { DataManipulator } from './DataManipulator';
+ import './Graph.css';
+@@ -23,10 +23,13 @@ class Graph extends Component<IProps, {}> {
+     const elem = document.getElementsByTagName('perspective-viewer')[0] as unknown as PerspectiveViewerElement;
+ 
+     const schema = {
+-      stock: 'string',
+-      top_ask_price: 'float',
+-      top_bid_price: 'float',
++      price_abc:'float',
++      price_def:'float',
++      ratio: 'float',
++      upper_bound: 'float',
++      lower_bound: 'float',
+       timestamp: 'date',
++      trigger_alert:'float',
+     };
+ 
+     if (window.perspective && window.perspective.worker()) {
+@@ -36,13 +39,14 @@ class Graph extends Component<IProps, {}> {
+       // Load the `table` in the `<perspective-viewer>` DOM reference.
+       elem.load(this.table);
+       elem.setAttribute('view', 'y_line');
+-      elem.setAttribute('column-pivots', '["stock"]');
+       elem.setAttribute('row-pivots', '["timestamp"]');
+-      elem.setAttribute('columns', '["top_ask_price"]');
++      elem.setAttribute('columns', '["ratio","upper_bound","lower_bound","trigger_alert"]');
+       elem.setAttribute('aggregates', JSON.stringify({
+-        stock: 'distinctcount',
+-        top_ask_price: 'avg',
+-        top_bid_price: 'avg',
++        price_abc:'avg',
++        price_def:'avg',
++        ratio:'avg',
++        upper_bound: 'avg',
++        lower_bound: 'avg',
+         timestamp: 'distinct count',
+       }));
+     }
+@@ -50,11 +54,11 @@ class Graph extends Component<IProps, {}> {
+ 
+   componentDidUpdate() {
+     if (this.table) {
+-      this.table.update(
++      this.table.update([
+         DataManipulator.generateRow(this.props.data),
+-      );
++      ]as unknown as TableData);
+     }
+   }
+ }
+ 
+-export default Graph;
++export default Graph;
+\ No newline at end of file
+-- 
+2.39.2 (Apple Git-143)
+
